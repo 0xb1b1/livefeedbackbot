@@ -206,7 +206,8 @@ async fn start(bot: Bot, user: User, code: String, db: &Database) -> ResponseRes
     let chat_id: ChatId = ChatId(user.telegram_id as i64);
     if code == String::from("") {
         bot.send_message(chat_id,
-            "Вас приветствует LiveFeedback бот! Разработкой занимался @oxb1b1 из ITAM ;)
+            "Вас приветствует LiveFeedback бот! Разработкой занимался Аксель (@oxb1b1) из ITAM (@itatmisis) ;)
+Исходный код бота в открытом доступе на GitHub: https://github.com/0xb1b1/livefeedbackbot
 \nПожалуйста, введите код выступления после команды /start или отсканируйте QR на мероприятии
 Помощь: /help").await?;
         return Ok(());

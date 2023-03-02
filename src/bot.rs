@@ -276,7 +276,7 @@ async fn list_by_code(bot: &Bot, chat_id: ChatId, code: String, db: &Database) -
     let responses_count: i32 = responses.len() as i32;
     // Format responses as a string for output in chatbot
     let responses = responses.iter().map(|r| format!("@{} — {} {}", r.username, r.first_name, r.last_name)).collect::<Vec<String>>().join("\n");
-    bot.send_message(chat_id, format!("На выступление {} отметились {} человек(а):\n\n{}", code, responses_count, responses)).await?;
+    bot.send_message(chat_id, format!("На выступлении {} отметились {} человек(а):\n\n{}", code, responses_count, responses)).await?;
 
     Ok(())
 }

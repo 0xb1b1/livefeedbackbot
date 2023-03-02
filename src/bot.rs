@@ -52,6 +52,8 @@ enum Command {
     Start(String),
     #[command(description = "Display this help message `None`")]
     Help,
+    #[command(description = "Display information about the bot and its author `None`")]
+    About,
     #[command(description = "List all participants by code `<secret> <code>`", parse_with = "split")]
     ListByCode { secret: String, code: String },
     #[command(description = "List all participants `<secret>`")]
@@ -89,6 +91,12 @@ async fn answer(bot: Bot, msg: Message, cmd: Command, db: &Database) -> Response
         }
         Command::Help => {
             bot.send_message(msg.chat.id, Command::descriptions().to_string()).await?;
+            ()
+        }
+        Command::About => {
+            bot.send_message(msg.chat.id, "Разработкой занимался Аксель (@oxb1b1) из ITAM (@itatmisis) ;)
+Исходный код бота в открытом доступе на GitHub: https://github.com/0xb1b1/livefeedbackbot
+\nRust <3").await?;
             ()
         }
         Command::ListByCode { secret, code } => {
@@ -207,7 +215,7 @@ async fn start(bot: Bot, user: User, code: String, db: &Database) -> ResponseRes
     if code == String::from("") {
         bot.send_message(chat_id,
             "Вас приветствует LiveFeedback бот! Разработкой занимался Аксель (@oxb1b1) из ITAM (@itatmisis) ;)
-Исходный код бота в открытом доступе на GitHub: https://github.com/0xb1b1/livefeedbackbot
+Исходный код бота в открытом доступе. Узнать больше: /about
 \nПожалуйста, введите код выступления после команды /start или отсканируйте QR на мероприятии
 Помощь: /help").await?;
         return Ok(());

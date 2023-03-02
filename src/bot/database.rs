@@ -13,6 +13,15 @@ pub struct Response {
     pub telegram_id: i32,
 }
 
+pub struct FullResponse {
+    pub id: Option<i32>,
+    pub speech_code: String,
+    pub telegram_id: i32,
+    pub username: String,
+    pub first_name: String,
+    pub last_name: String,
+}
+
 pub struct User {
     pub telegram_id: i32,
     pub username: String,
@@ -107,13 +116,18 @@ impl Database {
         Ok(())
     }
 
+    pub async fn flush_responses(&self) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM responses")
+            .execute(&self.pool)
+            .await.unwrap_or_default();
+        Ok(())
+    }
+
     pub async fn flush_codes(&self) -> Result<(), sqlx::Error> {
         sqlx::query("DELETE FROM allowed_codes")
             .execute(&self.pool)
             .await.unwrap_or_default();
-        sqlx::query("DELETE FROM responses")
-            .execute(&self.pool)
-            .await.unwrap_or_default();
+        self.flush_responses().await?;
         Ok(())
     }
 
@@ -145,6 +159,41 @@ impl Database {
         Ok(())
     }
 
+    // pub async fn get_all_responses(&self) -> Result<Vec<Response>, sqlx::Error> {
+    //     let mut responses: Vec<Response> = Vec::new();
+    //     let mut rows = sqlx::query("SELECT * FROM responses")
+    //         .fetch(&self.pool);
+
+    //     while let Some(row) = rows.try_next().await? {
+    //         responses.push(Response {
+    //             id: row.get("id"),
+    //             speech_code: row.get("speech_code"),
+    //             telegram_id: row.get("telegram_id"),
+    //         });
+    //     }
+
+    //     Ok(responses)
+    // }
+
+    pub async fn vec_response_to_fullresponse(&self, responses: Vec<Response>) -> Result<Vec<FullResponse>, sqlx::Error> {
+        let mut full_responses: Vec<FullResponse> = Vec::new();
+        for response in responses {
+            let user = sqlx::query("SELECT * FROM users WHERE telegram_id = $1")
+                .bind(response.telegram_id)
+                .fetch_one(&self.pool)
+                .await?;
+            full_responses.push(FullResponse {
+                id: response.id,
+                speech_code: response.speech_code,
+                telegram_id: response.telegram_id,
+                username: user.get("username"),
+                first_name: user.get("first_name"),
+                last_name: user.get("last_name"),
+            });
+        }
+        Ok(full_responses)
+    }
+
     pub async fn get_users_by_code(&self, code: String) -> Result<Vec<i32>, sqlx::Error> {
         let mut users: Vec<i32> = Vec::new();
         let mut rows = sqlx::query("SELECT telegram_id FROM responses WHERE speech_code = $1")
@@ -162,6 +211,23 @@ impl Database {
         let mut responses: Vec<Response> = Vec::new();
         let mut rows = sqlx::query("SELECT * FROM responses WHERE telegram_id = $1")
             .bind(user_id)
+            .fetch(&self.pool);
+
+        while let Some(row) = rows.try_next().await? {
+            responses.push(Response {
+                id: Some(row.get(0)),
+                speech_code: row.get(1),
+                telegram_id: row.get(2),
+            });
+        }
+
+        Ok(responses)
+    }
+
+    pub async fn get_by_code(&self, code: String) -> Result<Vec<Response>, sqlx::Error> {
+        let mut responses: Vec<Response> = Vec::new();
+        let mut rows = sqlx::query("SELECT * FROM responses WHERE speech_code = $1")
+            .bind(code)
             .fetch(&self.pool);
 
         while let Some(row) = rows.try_next().await? {

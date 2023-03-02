@@ -1,0 +1,28 @@
+version: '3'
+
+volumes:
+  db-testing:
+
+services:
+  db:
+    image: postgres:14
+    ports:
+      - 5437:5432
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - "db-testing:/var/lib/postgresql/data"
+
+  pgadmin:
+    image: dpage/pgadmin4
+    ports:
+      - 8087:80
+    environment:
+      PGADMIN_DEFAULT_EMAIL: test@test.com
+      PGADMIN_DEFAULT_PASSWORD: itam666
+    depends_on:
+      - db
+    volumes:
+      - ./temp/pgadmin:/var/lib/pgadmin

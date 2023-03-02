@@ -25,7 +25,6 @@ lazy_static! {
 
 pub async fn run() {
     pretty_env_logger::init();
-    // Execute dotenv().ok(); if LIVEFEEDBACK_DOCKER is false or not set
     if env::var("LIVEFEEDBACK_DOCKER").unwrap_or_else(|_| "false".to_string()) != "true" {
         dotenv().ok();
     }
@@ -54,14 +53,18 @@ enum Command {
     #[command(description = "Display this help message `None`")]
     Help,
     #[command(description = "List all participants by code `<secret> <code>`", parse_with = "split")]
-    List { secret: String, code: String },
+    ListByCode { secret: String, code: String },
+    #[command(description = "List all participants `<secret>`")]
+    ListAll(String),
     #[command(description = "Get all your responses `None`")]
     Responses,
     #[command(description = "Add allowed speech code `<secret> <code>`", parse_with = "split")]
     AddCode { secret: String, code: String },
-    #[command(description = "Add allowed speech code `<secret> <code>`", parse_with = "split")]
+    #[command(description = "Delete allowed speech code `<secret> <code>`", parse_with = "split")]
     DelCode { secret: String, code: String },
-    #[command(description = "Flush all allowed speech codes AND ALL RESPONSES (!DANGEROUS) `<secret> YES`", parse_with = "split")]
+    #[command(description = "Flush all responses (DANGEROUS!) `<secret> YES`", parse_with = "split")]
+    FlushResponses { secret: String, confirmation: String },
+    #[command(description = "Flush all allowed speech codes AND ALL RESPONSES (DANGEROUS!) `<secret> YES`", parse_with = "split")]
     FlushCodes { secret: String, confirmation: String },
     #[command(description = "Get all allowed codes `<secret>`")]
     Codes(String),
@@ -88,13 +91,22 @@ async fn answer(bot: Bot, msg: Message, cmd: Command, db: &Database) -> Response
             bot.send_message(msg.chat.id, Command::descriptions().to_string()).await?;
             ()
         }
-        Command::List { secret, code } => {
+        Command::ListByCode { secret, code } => {
             if secret != env::var("SECRET").unwrap() {
                 bot.send_message(msg.chat.id, "Неверный секретный код").await?;
                 return Ok(());
             }
             // List all participants by code
-            list(bot, msg.chat.id, code.to_uppercase(), db).await?;
+            list_by_code(&bot, msg.chat.id, code.to_uppercase(), db).await?;
+            ()
+        }
+        Command::ListAll(secret) => {
+            if secret != env::var("SECRET").unwrap() {
+                bot.send_message(msg.chat.id, "Неверный секретный код").await?;
+                return Ok(());
+            }
+            // List all participants
+            list_all(bot, msg.chat.id, db).await?;
             ()
         }
         Command::Responses => {
@@ -116,6 +128,18 @@ async fn answer(bot: Bot, msg: Message, cmd: Command, db: &Database) -> Response
                 return Ok(());
             }
             del_code(bot, msg.chat.id, code.to_uppercase(), db).await?;
+            ()
+        }
+        Command::FlushResponses { secret, confirmation } => {
+            if secret != env::var("SECRET").unwrap() {
+                bot.send_message(msg.chat.id, "Неверный секретный код").await?;
+                return Ok(());
+            }
+            if confirmation != "YES" {
+                bot.send_message(msg.chat.id, "Операция не подтверждена. Отмена").await?;
+                return Ok(());
+            }
+            flush_responses(bot, msg.chat.id, db).await?;
             ()
         }
         Command::FlushCodes { secret, confirmation } => {
@@ -218,18 +242,32 @@ async fn del_code(bot: Bot, chat_id: ChatId, code: String, db: &Database) -> Res
     Ok(())
 }
 
+async fn flush_responses(bot: Bot, chat_id: ChatId, db: &Database) -> ResponseResult<()> {
+    db.flush_responses().await.unwrap();
+    bot.send_message(chat_id, "Все отклики удалены").await?;
+    Ok(())
+}
+
 async fn flush_codes(bot: Bot, chat_id: ChatId, db: &Database) -> ResponseResult<()> {
     db.flush_codes().await.unwrap();
     bot.send_message(chat_id, "Все коды выступлений и участники удалены").await?;
     Ok(())
 }
 
-async fn list(bot: Bot, chat_id: ChatId, code: String, db: &Database) -> ResponseResult<()> {
-    let responses = db.get_users_by_code(code).await.unwrap();
+async fn list_all(bot: Bot, chat_id: ChatId, db: &Database) -> ResponseResult<()> {
+    for code in db.get_codes().await.unwrap() {
+        list_by_code(&bot, chat_id, code, db).await?;
+    }
+
+    Ok(())
+}
+
+async fn list_by_code(bot: &Bot, chat_id: ChatId, code: String, db: &Database) -> ResponseResult<()> {
+    let responses = db.vec_response_to_fullresponse(db.get_by_code(code.clone()).await.unwrap()).await.unwrap();
     let responses_count: i32 = responses.len() as i32;
     // Format responses as a string for output in chatbot
-    let responses: String = responses.iter().map(|r| format!("{}\n", r)).collect::<Vec<String>>().join("");
-    bot.send_message(chat_id, format!("Всего {} откликов:\n\n{}", responses_count, responses)).await?;
+    let responses = responses.iter().map(|r| format!("@{} — {} {}", r.username, r.first_name, r.last_name)).collect::<Vec<String>>().join("\n");
+    bot.send_message(chat_id, format!("На выступление {} отметились {} человек(а):\n\n{}", code, responses_count, responses)).await?;
 
     Ok(())
 }

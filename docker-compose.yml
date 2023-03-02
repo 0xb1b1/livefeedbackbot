@@ -8,7 +8,10 @@ services:
     image: 0xb1b1/livefeedback:latest
     build:
       context: .
-      dockerfile: Dockerfile
+      # Select dockerfile depending on the platform
+      dockerfile: Dockerfile.${PLATFORM:-amd64}
+      args:
+        PLATFORM: ${PLATFORM}
     depends_on:
       - db
     env_file:

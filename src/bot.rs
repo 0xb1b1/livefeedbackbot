@@ -291,7 +291,7 @@ async fn broadcast(bot: Bot, chat_id: ChatId, message: String, db: &Database, sc
     };
     // Send message to all respondents
     for respondent in &respondents {
-        bot.send_message(ChatId(*respondent as i64), message.clone()).await?;
+        bot.send_message(ChatId(*respondent as i64), message.clone()).await.ok();
     }
     bot.send_message(chat_id, format!("Сообщение успешно отправлено количеству людей: {}", respondents.len())).await?;
     Ok(())

@@ -3,8 +3,8 @@ extern crate pretty_env_logger;
 mod database;
 mod wcsv;
 
-use database::{Database, Response, User, CodeResult, FullResponse};
-use wcsv::createCSVBody;
+use database::{Database, Response, User};
+use wcsv::create_csv_body;
 use async_once::AsyncOnce;
 //use futures::SinkExt;
 use dotenvy::dotenv;
@@ -284,8 +284,8 @@ async fn list_all(bot: Bot, chat_id: ChatId, db: &Database) -> ResponseResult<()
 }
 
 async fn list_all_csv(bot: Bot, chat_id: ChatId, db: &Database) -> ResponseResult<()> {
-    let coderes = createCSVBody(db.get_all_code_results().await.unwrap());
-    let teloxdoc = InputFile::memory(coderes.into_bytes());
+    let coderes = create_csv_body(db.get_all_code_results().await.unwrap());
+    let teloxdoc = InputFile::memory(coderes.into_bytes()).file_name("responses.csv");
     bot.send_document(chat_id, teloxdoc).await.ok();
     Ok(())
 }

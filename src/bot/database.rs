@@ -13,6 +13,7 @@ pub struct Response {
     pub telegram_id: i32,
 }
 
+#[derive(serde::Serialize)]
 pub struct FullResponse {
     pub id: Option<i32>,
     pub speech_code: String,
@@ -27,6 +28,12 @@ pub struct User {
     pub username: String,
     pub first_name: String,
     pub last_name: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct CodeResult {
+    pub speech_code: String,
+    pub responses: Vec<FullResponse>
 }
 
 pub struct Database {
@@ -239,6 +246,35 @@ impl Database {
         }
 
         Ok(responses)
+    }
+
+    pub async fn get_all_code_results(&self) -> Result<Vec<CodeResult>, sqlx::Error> {
+        // Get results from all allowed codes in the database
+        let mut code_results: Vec<CodeResult> = Vec::new();
+        let codes = self.get_codes().await?;
+        for code in codes {
+            let responses = self.get_by_code(code.clone()).await?;
+            let mut users: Vec<FullResponse> = Vec::new();
+            for response in responses {
+                let user = sqlx::query("SELECT * FROM users WHERE telegram_id = $1")
+                    .bind(response.telegram_id)
+                    .fetch_one(&self.pool)
+                    .await?;
+                users.push(FullResponse {
+                    id: response.id,
+                    speech_code: response.speech_code,
+                    telegram_id: response.telegram_id,
+                    username: user.get("username"),
+                    first_name: user.get("first_name"),
+                    last_name: user.get("last_name"),
+                });
+            }
+            code_results.push(CodeResult {
+                speech_code: code,
+                responses: users,
+            });
+        }
+        Ok(code_results)
     }
 
     // pub async fn get_all(&self) -> Result<Vec<Response>, sqlx::Error> {

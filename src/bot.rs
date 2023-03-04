@@ -1,17 +1,18 @@
 extern crate pretty_env_logger;
 
 mod database;
+mod wcsv;
 
-use database::{Database, Response, User};
+use database::{Database, Response, User, CodeResult, FullResponse};
+use wcsv::createCSVBody;
 use async_once::AsyncOnce;
 //use futures::SinkExt;
 use dotenvy::dotenv;
 use std::env;
 use teloxide::{prelude::*,
                utils::command::BotCommands,
-               types::ChatId
+               types::{ChatId, InputFile},
               };
-
 
 lazy_static! {
     /// A singleton database with a pool connection
@@ -58,6 +59,8 @@ enum Command {
     ListByCode { secret: String, code: String },
     #[command(description = "List all participants `<secret>`")]
     ListAll(String),
+    #[command(description = "List all participants in a CSV document `<secret>`")]
+    ListAllCSV(String),
     #[command(description = "Get all your responses `None`")]
     Responses,
     #[command(description = "Add allowed speech code `<secret> <code>`", parse_with = "split")]
@@ -115,6 +118,15 @@ async fn answer(bot: Bot, msg: Message, cmd: Command, db: &Database) -> Response
             }
             // List all participants
             list_all(bot, msg.chat.id, db).await?;
+            ()
+        }
+        Command::ListAllCSV(secret) => {
+            if secret != env::var("SECRET").unwrap() {
+                bot.send_message(msg.chat.id, "Неверный секретный код").await?;
+                return Ok(());
+            }
+            // List all participants
+            list_all_csv(bot, msg.chat.id, db).await?;
             ()
         }
         Command::Responses => {
@@ -268,6 +280,13 @@ async fn list_all(bot: Bot, chat_id: ChatId, db: &Database) -> ResponseResult<()
         list_by_code(&bot, chat_id, code, db).await?;
     }
 
+    Ok(())
+}
+
+async fn list_all_csv(bot: Bot, chat_id: ChatId, db: &Database) -> ResponseResult<()> {
+    let coderes = createCSVBody(db.get_all_code_results().await.unwrap());
+    let teloxdoc = InputFile::memory(coderes.into_bytes());
+    bot.send_document(chat_id, teloxdoc).await.ok();
     Ok(())
 }
 

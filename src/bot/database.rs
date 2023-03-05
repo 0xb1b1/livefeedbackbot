@@ -323,6 +323,25 @@ impl Database {
 
         Ok(username_results)
     }
+
+    pub async fn flush_responses_with_unknown_codes(&self) -> Result<(), sqlx::Error> {
+        // Strip all responses with codes that are not in the allowed codes list in the database
+        let codes = self.get_codes().await?;
+        let mut rows = sqlx::query("SELECT * FROM responses")
+            .fetch(&self.pool);
+
+        while let Some(row) = rows.try_next().await? {
+            let speech_code: String = row.get("speech_code");
+            if !codes.contains(&speech_code) {
+                sqlx::query("DELETE FROM responses WHERE id = $1")
+                    .bind(row.get::<i32, _>("id"))
+                    .execute(&self.pool)
+                    .await?;
+            }
+        }
+
+        Ok(())
+    }
     // pub async fn get_all(&self) -> Result<Vec<Response>, sqlx::Error> {
     //     let mut responses: Vec<Response> = Vec::new();
     //     let mut rows = sqlx::query("SELECT * FROM responses")

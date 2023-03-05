@@ -70,9 +70,11 @@ enum Command {
     AddCode { secret: String, code: String },
     #[command(description = "Delete allowed speech code `<secret> <code>`", parse_with = "split")]
     DelCode { secret: String, code: String },
-    #[command(description = "Flush all responses (DANGEROUS!) `<secret> YES`", parse_with = "split")]
+    #[command(description = "Flush all responses with unknown codes (DESTRUCTIVE!) `<secret> YES`", parse_with = "split")]
+    FlushUnknownResponses { secret: String, confirmation: String },
+    #[command(description = "Flush all responses (DESTRUCTIVE!) `<secret> YES`", parse_with = "split")]
     FlushResponses { secret: String, confirmation: String },
-    #[command(description = "Flush all allowed speech codes AND ALL RESPONSES (DANGEROUS!) `<secret> YES`", parse_with = "split")]
+    #[command(description = "Flush all allowed speech codes AND ALL RESPONSES (DESTRUCTIVE!) `<secret> YES`", parse_with = "split")]
     FlushCodes { secret: String, confirmation: String },
     #[command(description = "Get all allowed codes `<secret>`")]
     Codes(String),
@@ -160,6 +162,18 @@ async fn answer(bot: Bot, msg: Message, cmd: Command, db: &Database) -> Response
                 return Ok(());
             }
             del_code(bot, msg.chat.id, code.to_uppercase(), db).await?;
+            ()
+        }
+        Command::FlushUnknownResponses { secret, confirmation } => {
+            if secret != env::var("SECRET").unwrap() {
+                bot.send_message(msg.chat.id, "Неверный секретный код").await?;
+                return Ok(());
+            }
+            if confirmation != "YES" {
+                bot.send_message(msg.chat.id, "Операция не подтверждена. Отмена").await?;
+                return Ok(());
+            }
+            flush_unknown_responses(bot, msg.chat.id, db).await?;
             ()
         }
         Command::FlushResponses { secret, confirmation } => {
@@ -272,6 +286,12 @@ async fn del_code(bot: Bot, chat_id: ChatId, code: String, db: &Database) -> Res
     }
     db.del_code(&code).await.unwrap();
     bot.send_message(chat_id, format!("Код {} удален", code)).await?;
+    Ok(())
+}
+
+async fn flush_unknown_responses(bot: Bot, chat_id: ChatId, db: &Database) -> ResponseResult<()> {
+    db.flush_responses_with_unknown_codes().await.unwrap();
+    bot.send_message(chat_id, "Все отклики с неизвестными кодами удалены").await?;
     Ok(())
 }
 

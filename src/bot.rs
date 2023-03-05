@@ -4,7 +4,8 @@ mod database;
 mod wcsv;
 
 use database::{Database, Response, User};
-use wcsv::create_csv_body;
+use wcsv::{create_csv_body_by_code,
+    create_csv_body_by_username};
 use async_once::AsyncOnce;
 //use futures::SinkExt;
 use dotenvy::dotenv;
@@ -59,8 +60,10 @@ enum Command {
     ListByCode { secret: String, code: String },
     #[command(description = "List all participants `<secret>`")]
     ListAll(String),
-    #[command(description = "List all participants in a CSV document `<secret>`")]
-    ListAllCSV(String),
+    #[command(description = "List all participants in a CSV document, sorted by code `<secret>`")]
+    ListAllByCodeCSV(String),
+    #[command(description = "List all participants in a CSV document, sorted by username `<secret>`")]
+    ListAllByUsernameCSV(String),
     #[command(description = "Get all your responses `None`")]
     Responses,
     #[command(description = "Add allowed speech code `<secret> <code>`", parse_with = "split")]
@@ -120,13 +123,22 @@ async fn answer(bot: Bot, msg: Message, cmd: Command, db: &Database) -> Response
             list_all(bot, msg.chat.id, db).await?;
             ()
         }
-        Command::ListAllCSV(secret) => {
+        Command::ListAllByCodeCSV(secret) => {
             if secret != env::var("SECRET").unwrap() {
                 bot.send_message(msg.chat.id, "Неверный секретный код").await?;
                 return Ok(());
             }
             // List all participants
-            list_all_csv(bot, msg.chat.id, db).await?;
+            list_all_csv_by_code(bot, msg.chat.id, db).await?;
+            ()
+        }
+        Command::ListAllByUsernameCSV(secret) => {
+            if secret != env::var("SECRET").unwrap() {
+                bot.send_message(msg.chat.id, "Неверный секретный код").await?;
+                return Ok(());
+            }
+            // List all participants
+            list_all_csv_by_username(bot, msg.chat.id, db).await?;
             ()
         }
         Command::Responses => {
@@ -283,9 +295,16 @@ async fn list_all(bot: Bot, chat_id: ChatId, db: &Database) -> ResponseResult<()
     Ok(())
 }
 
-async fn list_all_csv(bot: Bot, chat_id: ChatId, db: &Database) -> ResponseResult<()> {
-    let coderes = create_csv_body(db.get_all_code_results().await.unwrap());
-    let teloxdoc = InputFile::memory(coderes.into_bytes()).file_name("responses.csv");
+async fn list_all_csv_by_code(bot: Bot, chat_id: ChatId, db: &Database) -> ResponseResult<()> {
+    let coderes = create_csv_body_by_code(db.get_all_code_results().await.unwrap());
+    let teloxdoc = InputFile::memory(coderes.into_bytes()).file_name("responses_by_code.csv");
+    bot.send_document(chat_id, teloxdoc).await.ok();
+    Ok(())
+}
+
+async fn list_all_csv_by_username(bot: Bot, chat_id: ChatId, db: &Database) -> ResponseResult<()> {
+    let coderes = create_csv_body_by_username(db.get_all_username_results().await.unwrap());
+    let teloxdoc = InputFile::memory(coderes.into_bytes()).file_name("responses_by_username.csv");
     bot.send_document(chat_id, teloxdoc).await.ok();
     Ok(())
 }

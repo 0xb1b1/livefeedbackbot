@@ -36,6 +36,12 @@ pub struct CodeResult {
     pub responses: Vec<FullResponse>
 }
 
+pub struct UsernameResult {
+    pub telegram_id: i32,
+    pub username: String,
+    pub responses: Vec<FullResponse>
+}
+
 pub struct Database {
     pub pool: sqlx::PgPool,
 }
@@ -248,6 +254,30 @@ impl Database {
         Ok(responses)
     }
 
+    pub async fn get_by_telegram_id(&self, telegram_id: i32) -> Result<Vec<FullResponse>, sqlx::Error> {
+        let mut responses: Vec<FullResponse> = Vec::new();
+        let mut rows = sqlx::query("SELECT * FROM responses WHERE telegram_id = $1")
+            .bind(telegram_id)
+            .fetch(&self.pool);
+
+        while let Some(row) = rows.try_next().await? {
+            let user = sqlx::query("SELECT * FROM users WHERE telegram_id = $1")
+                .bind(telegram_id)
+                .fetch_one(&self.pool)
+                .await?;
+            responses.push(FullResponse {
+                id: row.get("id"),
+                speech_code: row.get("speech_code"),
+                telegram_id: row.get("telegram_id"),
+                username: user.get("username"),
+                first_name: user.get("first_name"),
+                last_name: user.get("last_name"),
+            });
+        }
+
+        Ok(responses)
+    }
+
     pub async fn get_all_code_results(&self) -> Result<Vec<CodeResult>, sqlx::Error> {
         // Get results from all allowed codes in the database
         let mut code_results: Vec<CodeResult> = Vec::new();
@@ -277,6 +307,22 @@ impl Database {
         Ok(code_results)
     }
 
+    pub async fn get_all_username_results(&self) -> Result<Vec<UsernameResult>, sqlx::Error> {
+        // Get results from all usernames in the database
+        let mut username_results: Vec<UsernameResult> = Vec::new();
+        let telegram_ids = self.get_users().await?;
+        for telegram_id in telegram_ids {
+            let responses = self.get_by_telegram_id(telegram_id).await?;
+            let username = responses[0].username.clone();
+            username_results.push(UsernameResult {
+                telegram_id,
+                username,
+                responses,
+            });
+        }
+
+        Ok(username_results)
+    }
     // pub async fn get_all(&self) -> Result<Vec<Response>, sqlx::Error> {
     //     let mut responses: Vec<Response> = Vec::new();
     //     let mut rows = sqlx::query("SELECT * FROM responses")
@@ -287,4 +333,4 @@ impl Database {
 
     //     Ok(vec![])
     // }
-}
+    }

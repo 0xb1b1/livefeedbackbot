@@ -25,7 +25,7 @@ WORKDIR /build/livefb
 
 COPY ./src ./src
 COPY ./Cargo.toml ./
-COPY ./Cargo.lock ./
+#COPY ./Cargo.lock ./
 
 RUN apt update && apt install -y musl-tools musl-dev && update-ca-certificates && \
     cargo build --target x86_64-unknown-linux-musl --release;

@@ -207,28 +207,25 @@ impl Database {
         Ok(full_responses)
     }
 
-    pub async fn get_responses_by_username(&self, username: String) -> Option<Vec<Response>> {
+    pub async fn get_responses_by_username(&self, username: String) -> Result<Vec<Response>, sqlx::Error> {
         let mut responses: Vec<Response> = Vec::new();
         let telegram_id = sqlx::query("SELECT telegram_id FROM users where username = $1")
             .bind(username)
             .fetch_one(&self.pool)
-            .await;
-        if telegram_id.is_err() {
-            return None;
-        }
-        let telegram_id: i32 = telegram_id.unwrap().get("telegram_id");
+            .await?;
+        let telegram_id: i32 = telegram_id.get("telegram_id");
         let mut rows = sqlx::query("SELECT * FROM responses WHERE telegram_id = $1")
             .bind(telegram_id)
             .fetch(&self.pool);
 
-        if let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             responses.push(Response {
                 id: row.get("id"),
                 speech_code: row.get("speech_code"),
                 telegram_id: row.get("telegram_id"),
             });
         }
-        Some(responses)
+        Ok(responses)
     }
 
     pub async fn get_users_by_code(&self, code: String) -> Result<Vec<i32>, sqlx::Error> {

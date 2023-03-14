@@ -344,15 +344,12 @@ async fn list_all_csv_by_username(bot: Bot, chat_id: ChatId, db: &Database) -> R
 }
 
 async fn list_all_responses_by_user(bot: Bot, chat_id: ChatId, username: String, db: &Database) -> ResponseResult<()> {
-    let user_responses_opt = db.get_responses_by_username(username.clone())
-        .await;
-    let user_responses: Vec<Response>;
-    match user_responses_opt {
-        Some(responses) => user_responses = responses,
-        None => {
-            bot.send_message(chat_id, "Пользователь не найден").await?;
-            return Ok(());
-        }
+    let user_responses = db.get_responses_by_username(username.clone())
+        .await
+        .unwrap_or(Vec::default());
+    if user_responses.len() == 0 {
+        bot.send_message(chat_id, "Пользователь не найден").await?;
+        return Ok(());
     }
     let unameres = UsernameResult {
         telegram_id: chat_id.to_string().parse::<i32>().unwrap(),

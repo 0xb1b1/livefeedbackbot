@@ -344,18 +344,25 @@ async fn list_all_csv_by_username(bot: Bot, chat_id: ChatId, db: &Database) -> R
 }
 
 async fn list_all_responses_by_user(bot: Bot, chat_id: ChatId, username: String, db: &Database) -> ResponseResult<()> {
-    let user_responses = db.get_responses_by_username(username.clone())
-        .await
-        .unwrap();
+    let user_responses_opt = db.get_responses_by_username(username.clone())
+        .await;
+    let user_responses: Vec<Response>;
+    match user_responses_opt {
+        Some(responses) => user_responses = responses,
+        None => {
+            bot.send_message(chat_id, "Пользователь не найден").await?;
+            return Ok(());
+        }
+    }
     let unameres = UsernameResult {
         telegram_id: chat_id.to_string().parse::<i32>().unwrap(),
-        username: username,
+        username: username.clone(),
         responses: db.vec_response_to_fullresponse(user_responses)
         .await
         .unwrap(),
     };
     let teloxdoc = InputFile::memory(create_csv_body_by_username(vec![unameres]).into_bytes())
-        .file_name("responses_by_username.csv");
+        .file_name(format!("responses_by_username-{}.csv", username));
     bot.send_document(chat_id, teloxdoc)
         .await
         .ok();

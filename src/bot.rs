@@ -60,13 +60,15 @@ enum Command {
     #[command(description = "List all participants by code `<secret> <code>`", parse_with = "split")]
     ListByCode { secret: String, code: String },
     #[command(description = "List all participants `<secret>`")]
-    ListAll(String),
+    LAll(String),
     #[command(description = "List all participants in a CSV document, sorted by code `<secret>`")]
-    ListAllByCodeCSV(String),
+    LAllByCodeCSV(String),
     #[command(description = "List all participants in a CSV document, sorted by username `<secret>`")]
-    ListAllByUsernameCSV(String),
+    LAllByUsernameCSV(String),
     #[command(description = "Get all responses by username `<secret> <username>`", parse_with = "split")]
-    ListAllOfUser { secret: String, username: String },
+    LAllOfUserCSV { secret: String, username: String },
+    #[command(description = "Get responses aggregated by username `<secret> <code>`")]
+    LAllAggregatedByUsernameCSV(String),
     #[command(description = "Get all your responses `None`")]
     Responses,
     #[command(description = "Add allowed speech code `<secret> <code>`", parse_with = "split")]
@@ -119,7 +121,7 @@ async fn answer(bot: Bot, msg: Message, cmd: Command, db: &Database) -> Response
             list_by_code(&bot, msg.chat.id, code.to_uppercase(), db).await?;
             ()
         }
-        Command::ListAll(secret) => {
+        Command::LAll(secret) => {
             if secret != env::var("SECRET").unwrap() {
                 bot.send_message(msg.chat.id, "Неверный секретный код").await?;
                 return Ok(());
@@ -128,7 +130,7 @@ async fn answer(bot: Bot, msg: Message, cmd: Command, db: &Database) -> Response
             list_all(bot, msg.chat.id, db).await?;
             ()
         }
-        Command::ListAllByCodeCSV(secret) => {
+        Command::LAllByCodeCSV(secret) => {
             if secret != env::var("SECRET").unwrap() {
                 bot.send_message(msg.chat.id, "Неверный секретный код").await?;
                 return Ok(());
@@ -137,7 +139,7 @@ async fn answer(bot: Bot, msg: Message, cmd: Command, db: &Database) -> Response
             list_all_csv_by_code(bot, msg.chat.id, db).await?;
             ()
         }
-        Command::ListAllByUsernameCSV(secret) => {
+        Command::LAllByUsernameCSV(secret) => {
             if secret != env::var("SECRET").unwrap() {
                 bot.send_message(msg.chat.id, "Неверный секретный код").await?;
                 return Ok(());
@@ -146,9 +148,20 @@ async fn answer(bot: Bot, msg: Message, cmd: Command, db: &Database) -> Response
             list_all_csv_by_username(bot, msg.chat.id, db).await?;
             ()
         }
-        Command::ListAllOfUser { secret, username } => {
-            // List all responses by user
+        Command::LAllOfUserCSV { secret, username } => {
+            if secret != env::var("SECRET").unwrap() {
+                bot.send_message(msg.chat.id, "Неверный секретный код").await?;
+                return Ok(());
+            }
             list_all_responses_by_user(bot, msg.chat.id, username, db).await?;
+            ()
+        }
+        Command::LAllAggregatedByUsernameCSV(secret) => {
+            if secret != env::var("SECRET").unwrap() {
+                bot.send_message(msg.chat.id, "Неверный секретный код").await?;
+                return Ok(());
+            }
+            list_all_responses_aggregated_by_username(bot, msg.chat.id, db).await?;
             ()
         }
         Command::Responses => {
@@ -343,6 +356,16 @@ async fn list_all_csv_by_username(bot: Bot, chat_id: ChatId, db: &Database) -> R
     Ok(())
 }
 
+async fn list_by_code(bot: &Bot, chat_id: ChatId, code: String, db: &Database) -> ResponseResult<()> {
+    let responses = db.vec_response_to_fullresponse(db.get_by_code(code.clone()).await.unwrap()).await.unwrap();
+    let responses_count: i32 = responses.len() as i32;
+    // Format responses as a string for output in chatbot
+    let responses = responses.iter().map(|r| format!("@{} — {} {}", r.username, r.first_name, r.last_name)).collect::<Vec<String>>().join("\n");
+    bot.send_message(chat_id, format!("На выступлении {} отметились {} человек(а):\n\n{}", code, responses_count, responses)).await?;
+
+    Ok(())
+}
+
 async fn list_all_responses_by_user(bot: Bot, chat_id: ChatId, username: String, db: &Database) -> ResponseResult<()> {
     let user_responses = db.get_responses_by_username(username.clone())
         .await
@@ -366,12 +389,15 @@ async fn list_all_responses_by_user(bot: Bot, chat_id: ChatId, username: String,
     Ok(())
 }
 
-async fn list_by_code(bot: &Bot, chat_id: ChatId, code: String, db: &Database) -> ResponseResult<()> {
-    let responses = db.vec_response_to_fullresponse(db.get_by_code(code.clone()).await.unwrap()).await.unwrap();
-    let responses_count: i32 = responses.len() as i32;
-    // Format responses as a string for output in chatbot
-    let responses = responses.iter().map(|r| format!("@{} — {} {}", r.username, r.first_name, r.last_name)).collect::<Vec<String>>().join("\n");
-    bot.send_message(chat_id, format!("На выступлении {} отметились {} человек(а):\n\n{}", code, responses_count, responses)).await?;
+async fn list_all_responses_aggregated_by_username(bot: Bot, chat_id: ChatId, db: &Database) -> ResponseResult<()> {
+    let unameres = db.get_all_username_results()
+        .await
+        .unwrap_or(Vec::default());
+    let teloxdoc = InputFile::memory(create_csv_body_by_username(unameres).into_bytes())
+        .file_name("aggregated_responses.csv");
+    bot.send_document(chat_id, teloxdoc)
+        .await
+        .ok();
 
     Ok(())
 }

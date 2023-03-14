@@ -33,11 +33,12 @@ pub fn create_csv_body_aggregated_by_username(coderes: Vec<UsernameResult>) -> S
     let mut wtr = Writer::from_writer(vec![]);
     wtr.write_record(&["username", "speech_codes"]).unwrap();
     for code in coderes {
-        let mut row = vec![code.username];
+        let mut speech_codes: String = String::new();
         for response in code.responses {
-            row.push(response.speech_code);
+            speech_codes.push_str(&response.speech_code);
+            speech_codes.push_str(", ");
         }
-        wtr.serialize(row).unwrap();
+        wtr.serialize(speech_codes).unwrap();
     }
 
     String::from_utf8(wtr.into_inner().unwrap()).unwrap()

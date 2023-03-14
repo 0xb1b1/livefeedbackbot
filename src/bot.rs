@@ -7,13 +7,14 @@ use database::{Database, Response, User};
 use wcsv::{create_csv_body_by_code,
     create_csv_body_by_username};
 use async_once::AsyncOnce;
-//use futures::SinkExt;
 use dotenvy::dotenv;
 use std::env;
 use teloxide::{prelude::*,
                utils::command::BotCommands,
                types::{ChatId, InputFile},
               };
+
+use self::database::UsernameResult;
 
 lazy_static! {
     /// A singleton database with a pool connection
@@ -64,6 +65,8 @@ enum Command {
     ListAllByCodeCSV(String),
     #[command(description = "List all participants in a CSV document, sorted by username `<secret>`")]
     ListAllByUsernameCSV(String),
+    #[command(description = "Get all responses by username `<secret> <username>`", parse_with = "split")]
+    ListAllOfUser { secret: String, username: String },
     #[command(description = "Get all your responses `None`")]
     Responses,
     #[command(description = "Add allowed speech code `<secret> <code>`", parse_with = "split")]
@@ -141,6 +144,11 @@ async fn answer(bot: Bot, msg: Message, cmd: Command, db: &Database) -> Response
             }
             // List all participants
             list_all_csv_by_username(bot, msg.chat.id, db).await?;
+            ()
+        }
+        Command::ListAllOfUser { secret, username } => {
+            // List all responses by user
+            list_all_responses_by_user(bot, msg.chat.id, username, db).await?;
             ()
         }
         Command::Responses => {
@@ -317,15 +325,40 @@ async fn list_all(bot: Bot, chat_id: ChatId, db: &Database) -> ResponseResult<()
 
 async fn list_all_csv_by_code(bot: Bot, chat_id: ChatId, db: &Database) -> ResponseResult<()> {
     let coderes = create_csv_body_by_code(db.get_all_code_results().await.unwrap());
-    let teloxdoc = InputFile::memory(coderes.into_bytes()).file_name("responses_by_code.csv");
-    bot.send_document(chat_id, teloxdoc).await.ok();
+    let teloxdoc = InputFile::memory(coderes.into_bytes())
+        .file_name("responses_by_code.csv");
+    bot.send_document(chat_id, teloxdoc)
+        .await
+        .ok();
     Ok(())
 }
 
 async fn list_all_csv_by_username(bot: Bot, chat_id: ChatId, db: &Database) -> ResponseResult<()> {
     let coderes = create_csv_body_by_username(db.get_all_username_results().await.unwrap());
-    let teloxdoc = InputFile::memory(coderes.into_bytes()).file_name("responses_by_username.csv");
-    bot.send_document(chat_id, teloxdoc).await.ok();
+    let teloxdoc = InputFile::memory(coderes.into_bytes())
+        .file_name("responses_by_username.csv");
+    bot.send_document(chat_id, teloxdoc)
+        .await
+        .ok();
+    Ok(())
+}
+
+async fn list_all_responses_by_user(bot: Bot, chat_id: ChatId, username: String, db: &Database) -> ResponseResult<()> {
+    let user_responses = db.get_responses_by_username(username.clone())
+        .await
+        .unwrap();
+    let unameres = UsernameResult {
+        telegram_id: chat_id.to_string().parse::<i32>().unwrap(),
+        username: username,
+        responses: db.vec_response_to_fullresponse(user_responses)
+        .await
+        .unwrap(),
+    };
+    let teloxdoc = InputFile::memory(create_csv_body_by_username(vec![unameres]).into_bytes())
+        .file_name("responses_by_username.csv");
+    bot.send_document(chat_id, teloxdoc)
+        .await
+        .ok();
     Ok(())
 }
 

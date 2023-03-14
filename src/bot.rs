@@ -5,7 +5,8 @@ mod wcsv;
 
 use database::{Database, Response, User};
 use wcsv::{create_csv_body_by_code,
-    create_csv_body_by_username};
+    create_csv_body_by_username,
+    create_csv_body_aggregated_by_username};
 use async_once::AsyncOnce;
 use dotenvy::dotenv;
 use std::env;
@@ -393,7 +394,7 @@ async fn list_all_responses_aggregated_by_username(bot: Bot, chat_id: ChatId, db
     let unameres = db.get_all_username_results()
         .await
         .unwrap_or(Vec::default());
-    let teloxdoc = InputFile::memory(create_csv_body_by_username(unameres).into_bytes())
+    let teloxdoc = InputFile::memory(create_csv_body_aggregated_by_username(unameres).into_bytes())
         .file_name("aggregated_responses.csv");
     bot.send_document(chat_id, teloxdoc)
         .await

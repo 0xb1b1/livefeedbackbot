@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use csv::Writer;
 
 use crate::bot::database::{

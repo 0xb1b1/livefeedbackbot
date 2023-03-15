@@ -37,8 +37,12 @@ pub fn create_csv_body_aggregated_by_username(coderes: Vec<UsernameResult>) -> S
         let mut speech_codes: String = String::new();
         row.push(code.username.clone());
         for response in code.responses {
-            speech_codes.push_str(&response.speech_code);
-            speech_codes.push_str(", ");
+            if response.speech_code != "" {
+                speech_codes.push_str(&response.speech_code);
+                speech_codes.push_str(", ");
+            } else {
+                speech_codes.push_str(&format!("ID: {}", &response.id.unwrap()));
+            }
         }
         row.push(speech_codes);
         wtr.write_record(row).unwrap();

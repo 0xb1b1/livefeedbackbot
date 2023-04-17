@@ -10,6 +10,7 @@ steps:
     image: plugins/docker
     pull: never
     settings:
+      dockerfile: Dockerfile.amd64
       repo: 0xb1b1/livefeedback
       tags: latest
       username:
